@@ -76,9 +76,22 @@ extension FirebaseDartOptions on FirebaseOptions {
       // The config is now returned as direct JSON instead of JavaScript format
       logger.stdout('No match found, using file contents directly.');
       logger.stdout('File Contents: ${appSdkConfig.fileContents}');
-      return FirebaseOptions.fromMap(
-        const JsonDecoder().convert(appSdkConfig.fileContents) as Map,
-      );
+      logger.stdout('Content length: ${appSdkConfig.fileContents.length}');
+      logger
+          .stdout('Content codeUnits: ${appSdkConfig.fileContents.codeUnits}');
+
+      try {
+        return FirebaseOptions.fromMap(
+          const JsonDecoder().convert(appSdkConfig.fileContents) as Map,
+        );
+      } catch (e) {
+        throw FormatException(
+          'Failed to parse Firebase configuration file. '
+          'Please ensure the file contains valid JSON.\n'
+          'Raw content: "${appSdkConfig.fileContents}"\n'
+          'Error: $e',
+        );
+      }
     }
   }
 }
