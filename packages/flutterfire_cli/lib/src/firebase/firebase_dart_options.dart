@@ -17,6 +17,7 @@
 
 import 'dart:convert';
 
+import '../common/global.dart';
 import '../common/utils.dart';
 import '../firebase.dart' as firebase;
 import '../firebase.dart';
@@ -65,12 +66,16 @@ extension FirebaseDartOptions on FirebaseOptions {
     var jsonBody = '';
     if (match != null) {
       jsonBody = match.namedGroup('jsonBody')!;
+      logger.stdout('Match found: $match');
+      logger.stdout('JSON Body: $jsonBody');
       return FirebaseOptions.fromMap(
         const JsonDecoder().convert('{$jsonBody}') as Map,
       );
     } else {
       // Handle new JSON format introduced in Firebase CLI v13.31.0
       // The config is now returned as direct JSON instead of JavaScript format
+      logger.stdout('No match found, using file contents directly.');
+      logger.stdout('File Contents: ${appSdkConfig.fileContents}');
       return FirebaseOptions.fromMap(
         const JsonDecoder().convert(appSdkConfig.fileContents) as Map,
       );
