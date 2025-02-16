@@ -655,57 +655,8 @@ class ConfigCommand extends FlutterFireCommand {
       stdout.writeln('Step 5: Writing configuration files...');
       // 4. Writes for all selected platforms
       final firebaseJsonWrites = <FirebaseJsonWrites>[];
+      stdout.writeln('Step 6: Writing configuration files...');
 
-      if (fetchedFirebaseOptions.androidOptions != null &&
-          applyGradlePlugins &&
-          flutterApp!.android &&
-          androidInputs != null) {
-        stdout.writeln('Writing Android configuration...');
-        final firebaseJsonWrite = await FirebaseAndroidWrites(
-          flutterApp: flutterApp!,
-          firebaseOptions: fetchedFirebaseOptions.androidOptions!,
-          logger: logger,
-          androidServiceFilePath: androidInputs!.serviceFilePath,
-          projectConfiguration: androidInputs!.projectConfiguration,
-        ).apply();
-
-        firebaseJsonWrites.add(firebaseJsonWrite);
-      }
-      if (Platform.isMacOS) {
-        if (fetchedFirebaseOptions.iosOptions != null &&
-            flutterApp!.ios &&
-            iosInputs != null) {
-          final firebaseJsonWrite = await appleWrites(
-            platformOptions: fetchedFirebaseOptions.iosOptions!,
-            flutterAppPath: flutterApp!.package.path,
-            serviceFilePath: iosInputs!.serviceFilePath,
-            logger: logger,
-            buildConfiguration: iosInputs?.buildConfiguration,
-            target: iosInputs?.target,
-            platform: kIos,
-            projectConfiguration: iosInputs!.projectConfiguration,
-          );
-
-          firebaseJsonWrites.add(firebaseJsonWrite);
-        }
-
-        if (fetchedFirebaseOptions.macosOptions != null &&
-            flutterApp!.macos &&
-            macosInputs != null) {
-          final firebaseJsonWrite = await appleWrites(
-            platformOptions: fetchedFirebaseOptions.macosOptions!,
-            flutterAppPath: flutterApp!.package.path,
-            serviceFilePath: macosInputs!.serviceFilePath,
-            logger: logger,
-            buildConfiguration: macosInputs?.buildConfiguration,
-            target: macosInputs?.target,
-            platform: kMacos,
-            projectConfiguration: macosInputs!.projectConfiguration,
-          );
-
-          firebaseJsonWrites.add(firebaseJsonWrite);
-        }
-      }
       if (firebaseConfigurationFileInputs.writeConfigurationFile) {
         final firebaseJsonWrite = FirebaseDartConfigurationWrite(
           configurationFilePath:
@@ -723,14 +674,22 @@ class ConfigCommand extends FlutterFireCommand {
         firebaseJsonWrites.add(firebaseJsonWrite);
       }
 
+      stdout.writeln('Step 7: Writing configuration files...');
+
       // 5. Writes for "firebase.json" file in root of project
       if (firebaseJsonWrites.isNotEmpty) {
-        await writeToFirebaseJson(
-          listOfWrites: firebaseJsonWrites,
-          firebaseJsonPath:
-              path.join(flutterApp!.package.path, 'firebase.json'),
-        );
+        try {
+          await writeToFirebaseJson(
+            listOfWrites: firebaseJsonWrites,
+            firebaseJsonPath:
+                path.join(flutterApp!.package.path, 'firebase.json'),
+          );
+        } catch (e) {
+          stderr.writeln('Step 9: writing to firebase.json: $e');
+        }
       }
+
+      stdout.writeln('Step 8: Writing configuration files...');
 
       stdout.writeln('');
       stdout.writeln(

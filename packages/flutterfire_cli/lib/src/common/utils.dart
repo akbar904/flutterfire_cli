@@ -369,39 +369,52 @@ Future<void> writeToFirebaseJson({
   required List<FirebaseJsonWrites> listOfWrites,
   required String firebaseJsonPath,
 }) async {
+  stdout.writeln('Starting to write to firebase.json...');
   final file = File(firebaseJsonPath);
 
+  stdout.writeln('Checking if firebase.json exists...');
   final decodedMap = !file.existsSync()
       ? <String, dynamic>{}
       : json.decode(await file.readAsString()) as Map<String, dynamic>;
 
+  stdout.writeln('Processing writes...');
   for (final write in listOfWrites) {
+    stdout.writeln(
+        'Processing write for ${write.pathToMap.length} nested maps...');
     final map = getNestedMap(decodedMap, write.pathToMap);
 
     if (write.projectId != null) {
+      stdout.writeln('Writing projectId...');
       map[kProjectId] = write.projectId;
     }
 
     if (write.appId != null) {
+      stdout.writeln('Writing appId...');
       map[kAppId] = write.appId;
     }
 
     if (write.uploadDebugSymbols != null) {
+      stdout.writeln('Writing uploadDebugSymbols...');
       map[kUploadDebugSymbols] = write.uploadDebugSymbols;
     }
 
     if (write.fileOutput != null) {
+      stdout.writeln('Writing fileOutput...');
       map[kFileOutput] = write.fileOutput;
     }
 
     if (write.configurations != null) {
+      stdout.writeln('Writing configurations...');
       map[kConfigurations] = write.configurations;
     }
   }
 
+  stdout.writeln('Encoding map to JSON...');
   final mapJson = json.encode(decodedMap);
 
+  stdout.writeln('Writing to firebase.json...');
   file.writeAsStringSync(mapJson);
+  stdout.writeln('Write to firebase.json completed.');
 }
 
 Map<String, dynamic> getNestedMap(Map<String, dynamic> map, List<String> keys) {
