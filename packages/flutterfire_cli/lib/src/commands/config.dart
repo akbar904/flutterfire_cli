@@ -284,7 +284,7 @@ class ConfigCommand extends FlutterFireCommand {
       return value;
     }
     if (deprecatedValue != null) {
-      logger.stdout(
+      stdout.writeln(
         'Warning - android-app-id (-a) is deprecated. Consider using android-package-name (-p) instead.',
       );
       return deprecatedValue;
@@ -367,6 +367,7 @@ class ConfigCommand extends FlutterFireCommand {
   AndroidInputs? androidInputs;
 
   Future<FirebaseProject> _promptCreateFirebaseProject() async {
+    stdout.writeln('Preparing to create a new Firebase project...');
     final newProjectId = promptInput(
       'Enter a project id for your new Firebase project (e.g. ${AnsiStyles.cyan('my-cool-project')})',
       validator: (String x) {
@@ -377,6 +378,7 @@ class ConfigCommand extends FlutterFireCommand {
         }
       },
     );
+    stdout.writeln('Validating project ID...');
     final creatingProjectSpinner = spinner(
       (done) {
         if (!done) {
@@ -396,6 +398,7 @@ class ConfigCommand extends FlutterFireCommand {
   }
 
   Future<FirebaseProject> _selectFirebaseProject() async {
+    stdout.writeln('Starting Firebase project selection...');
     var selectedProjectId = projectId;
     var projectListFail = false;
     selectedProjectId ??= await firebase.getDefaultFirebaseProjectId();
@@ -432,6 +435,7 @@ class ConfigCommand extends FlutterFireCommand {
       fetchingProjectsSpinner.done();
 
       if (selectedProjectId != null) {
+        stdout.writeln('Using default Firebase project ID: $selectedProjectId');
         return firebaseProjects.firstWhere(
           (project) => project.projectId == selectedProjectId,
           orElse: () {
@@ -511,7 +515,7 @@ class ConfigCommand extends FlutterFireCommand {
           .map((e) => e.key)
           .toList()
           .join(',');
-      logger.stdout(
+      stdout.writeln(
         AnsiStyles.bold(
           '${AnsiStyles.blue('i')} Selected platforms: ${AnsiStyles.green(selectedPlatformsString)}',
         ),
@@ -563,27 +567,39 @@ class ConfigCommand extends FlutterFireCommand {
 
   @override
   Future<void> run() async {
+    stdout.writeln('Starting FlutterFire CLI configuration...');
     // Has to set during `run()` otherwise `argResults` will be null
-    updateDebugMode(argResults!['debug']as bool);
+    updateDebugMode(argResults!['debug'] as bool);
     try {
+      stdout.writeln('Checking Flutter app requirements...');
       commandRequiresFlutterApp();
+
+      stdout.writeln('Checking for existing configuration...');
       final reconfigured = await checkIfUserRequiresReconfigure();
 
       if (reconfigured) {
+        stdout.writeln('Using existing configuration...');
         return;
       }
 
+      stdout.writeln('Starting new configuration process...');
       // 1. Select Firebase project and platforms
+      stdout.writeln('Step 1: Selecting Firebase project...');
       final selectedFirebaseProject = await _selectFirebaseProject();
+
+      stdout.writeln('Step 2: Selecting platforms...');
       final selectedPlatforms = _selectPlatforms();
 
       if (!selectedPlatforms.containsValue(true)) {
+        stdout.writeln('Error: No platforms selected');
         throw NoFlutterPlatformsSelectedException();
       }
 
+      stdout.writeln('Step 3: Validating platform configurations...');
       // 2. Validate and prompt for platform specific inputs
       if (Platform.isMacOS) {
         if (flutterApp!.ios && selectedPlatforms[kIos]!) {
+          stdout.writeln('Validating iOS configuration...');
           iosInputs = await appleValidation(
             platform: kIos,
             flutterAppPath: flutterApp!.package.path,
@@ -616,7 +632,7 @@ class ConfigCommand extends FlutterFireCommand {
         overwrite: yes || overwriteFirebaseOptions == true,
       );
 
-      // 3. Get values for all selected platforms
+      stdout.writeln('Step 4: Fetching Firebase options...');
       final fetchedFirebaseOptions = await fetchAllFirebaseOptions(
         flutterApp: flutterApp!,
         firebaseProjectId: selectedFirebaseProject.projectId,
@@ -636,6 +652,7 @@ class ConfigCommand extends FlutterFireCommand {
         linux: selectedPlatforms[kLinux] != null && selectedPlatforms[kLinux]!,
       );
 
+      stdout.writeln('Step 5: Writing configuration files...');
       // 4. Writes for all selected platforms
       final firebaseJsonWrites = <FirebaseJsonWrites>[];
 
@@ -643,6 +660,7 @@ class ConfigCommand extends FlutterFireCommand {
           applyGradlePlugins &&
           flutterApp!.android &&
           androidInputs != null) {
+        stdout.writeln('Writing Android configuration...');
         final firebaseJsonWrite = await FirebaseAndroidWrites(
           flutterApp: flutterApp!,
           firebaseOptions: fetchedFirebaseOptions.androidOptions!,
@@ -714,12 +732,12 @@ class ConfigCommand extends FlutterFireCommand {
         );
       }
 
-      logger.stdout('');
-      logger.stdout(
+      stdout.writeln('');
+      stdout.writeln(
         logFirebaseConfigGenerated(outputFilePath),
       );
-      logger.stdout('');
-      logger.stdout(
+      stdout.writeln('');
+      stdout.writeln(
         listAsPaddedTable(
           [
             [AnsiStyles.bold('Platform'), AnsiStyles.bold('Firebase App Id')],
@@ -739,8 +757,8 @@ class ConfigCommand extends FlutterFireCommand {
           paddingSize: 2,
         ),
       );
-      logger.stdout('');
-      logger.stdout(
+      stdout.writeln('');
+      stdout.writeln(
         logLearnMoreAboutCli,
       );
     } catch (e) {

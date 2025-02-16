@@ -8,4 +8,4 @@ void updateDebugMode(bool value) {
   _debugMode = value;
 }
 
-Logger get logger => debugMode ? Logger.verbose() : Logger.standard();
+Logger get logger => Logger.verbose();
