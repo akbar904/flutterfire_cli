@@ -250,6 +250,8 @@ class Reconfigure extends FlutterFireCommand {
   Future<void> _writeDartConfigurationFile(
     Map<String, dynamic> firebaseJsonMap,
   ) async {
+    logger.stdout('Starting Dart configuration file write...');
+
     final dartConfig = getNestedMap(
       firebaseJsonMap,
       [
@@ -258,13 +260,19 @@ class Reconfigure extends FlutterFireCommand {
         kDart,
       ],
     );
+    logger.stdout('Dart config from firebase.json: $dartConfig');
 
     final listOfConfigWrites =
         dartConfig.entries.map<Future<List<ConfigFileWrite>>>((entry) {
       final path = entry.key;
       final map = entry.value as Map<String, dynamic>;
+      logger.stdout('Processing configuration for path: $path');
+      logger.stdout('Configuration map: $map');
+
       final configurations = map[kConfigurations] as Map<String, dynamic>;
       final projectId = map[kProjectId] as String;
+      logger.stdout('Project ID: $projectId');
+      logger.stdout('Configurations: $configurations');
 
       final configWrite = ConfigFileWrite(
         pathToConfig: path,
@@ -274,57 +282,83 @@ class Reconfigure extends FlutterFireCommand {
       final appSDKConfigFutures = configurations.entries.map((entry) {
         final platform = entry.key;
         final appId = entry.value as String;
+        logger.stdout('Processing platform: $platform with appId: $appId');
 
         return Future(() async {
           final platformFirebase = platform == kWindows ? kWeb : platform;
-          final appSdkConfig = await getAppSdkConfig(
-            appId: appId,
-            platform: platformFirebase,
-          );
+          logger.stdout(
+              'Fetching app SDK config for platform: $platformFirebase');
 
-          switch (platform) {
-            case kAndroid:
-              configWrite.androidOptions =
-                  FirebaseAndroidOptions.convertConfigToOptions(
-                appSdkConfig,
-                appId,
-                projectId,
-              );
-              break;
-            case kIos:
-              configWrite.iosOptions =
-                  FirebaseAppleOptions.convertConfigToOptions(
-                appSdkConfig,
-                appId,
-                projectId,
-              );
-              break;
-            case kMacos:
-              configWrite.macosOptions =
-                  FirebaseAppleOptions.convertConfigToOptions(
-                appSdkConfig,
-                appId,
-                projectId,
-              );
-              break;
-            case kWeb:
-              configWrite.webOptions =
-                  FirebaseDartOptions.convertConfigToOptions(
-                appSdkConfig,
-                projectId,
-              );
-              break;
-            case kWindows:
-              configWrite.windowsOptions =
-                  FirebaseDartOptions.convertConfigToOptions(
-                appSdkConfig,
-                projectId,
-              );
-              break;
-            default:
-              throw Exception(
-                'Platform: $platform is not supported for "flutterfire reconfigure".',
-              );
+          try {
+            final appSdkConfig = await getAppSdkConfig(
+              appId: appId,
+              platform: platformFirebase,
+            );
+            logger.stdout('Successfully retrieved SDK config for $platform');
+
+            switch (platform) {
+              case kAndroid:
+                logger.stdout('Converting Android config to options...');
+                configWrite.androidOptions =
+                    FirebaseAndroidOptions.convertConfigToOptions(
+                  appSdkConfig,
+                  appId,
+                  projectId,
+                );
+                logger.stdout(
+                    'Android options conversion completed: ${configWrite.androidOptions}');
+                break;
+              case kIos:
+                logger.stdout('Converting iOS config to options...');
+                configWrite.iosOptions =
+                    FirebaseAppleOptions.convertConfigToOptions(
+                  appSdkConfig,
+                  appId,
+                  projectId,
+                );
+                logger.stdout(
+                    'iOS options conversion completed: ${configWrite.iosOptions}');
+                break;
+              case kMacos:
+                logger.stdout('Converting macOS config to options...');
+                configWrite.macosOptions =
+                    FirebaseAppleOptions.convertConfigToOptions(
+                  appSdkConfig,
+                  appId,
+                  projectId,
+                );
+                logger.stdout(
+                    'macOS options conversion completed: ${configWrite.macosOptions}');
+                break;
+              case kWeb:
+                logger.stdout('Converting web config to options...');
+                configWrite.webOptions =
+                    FirebaseDartOptions.convertConfigToOptions(
+                  appSdkConfig,
+                  projectId,
+                );
+                logger.stdout(
+                    'Web options conversion completed: ${configWrite.webOptions}');
+                break;
+              case kWindows:
+                logger.stdout('Converting Windows config to options...');
+                configWrite.windowsOptions =
+                    FirebaseDartOptions.convertConfigToOptions(
+                  appSdkConfig,
+                  projectId,
+                );
+                logger.stdout(
+                    'Windows options conversion completed: ${configWrite.windowsOptions}');
+                break;
+              default:
+                logger.stderr('Unsupported platform encountered: $platform');
+                throw Exception(
+                  'Platform: $platform is not supported for "flutterfire reconfigure".',
+                );
+            }
+          } catch (e) {
+            logger.stderr('Error getting SDK config for $platform: $e');
+            rethrow;
           }
 
           return configWrite;
@@ -332,15 +366,21 @@ class Reconfigure extends FlutterFireCommand {
       }).toList();
 
       return Future(() async {
+        logger.stdout('Waiting for all platform configurations to complete...');
         final configWrites = await Future.wait(appSDKConfigFutures);
+        logger.stdout('All platform configurations completed');
         return configWrites;
       });
     }).toList();
 
+    logger.stdout('Processing all configuration writes...');
     final configWrites =
         (await Future.wait(listOfConfigWrites)).expand((x) => x).toList();
+    logger.stdout('Number of configurations to write: ${configWrites.length}');
 
     for (final configWrite in configWrites) {
+      logger.stdout(
+          'Writing configuration for path: ${configWrite.pathToConfig}');
       final future = Future(() async {
         return FirebaseDartConfigurationWrite(
           configurationFilePath: configWrite.pathToConfig,
@@ -356,6 +396,7 @@ class Reconfigure extends FlutterFireCommand {
 
       await _writeFile(future, 'Dart configuration file write');
     }
+    logger.stdout('Completed writing all Dart configurations');
   }
 
   Future<void> _writeFile(Future writeFileFuture, String name) async {
@@ -374,43 +415,63 @@ class Reconfigure extends FlutterFireCommand {
   @override
   Future<void> run() async {
     try {
+      logger.stdout('Starting flutterfire reconfigure...');
       final firebaseJson = File(
         path.join(
           flutterApp!.package.path,
           'firebase.json',
         ),
       );
+      logger.stdout('Looking for firebase.json at: ${firebaseJson.path}');
 
       if (!firebaseJson.existsSync()) {
+        logger.stderr('firebase.json not found!');
         throw Exception(
           '"firebase.json" does not exist. Please run `flutterfire configure` first.',
         );
       }
+      logger.stdout('firebase.json exists, reading content...');
 
       final readFirebaseJson = firebaseJson.readAsStringSync();
+      logger.stdout('Firebase JSON content: $readFirebaseJson');
 
-      final firebaseJsonMap =
-          jsonDecode(readFirebaseJson) as Map<String, dynamic>;
-      final androidKeys = [
-        kFlutter,
-        kPlatforms,
-        kAndroid,
-      ];
+      Map<String, dynamic> firebaseJsonMap;
+      try {
+        firebaseJsonMap = jsonDecode(readFirebaseJson) as Map<String, dynamic>;
+        logger.stdout('Successfully parsed JSON configuration');
+        logger.stdout('Parsed JSON map: $firebaseJsonMap');
+      } catch (e) {
+        logger.stderr('Failed to parse Firebase JSON: $e');
+        logger.stderr('JSON content length: ${readFirebaseJson.length}');
+        rethrow;
+      }
+
+      final androidKeys = [kFlutter, kPlatforms, kAndroid];
+      logger.stdout('Checking for Android configuration...');
 
       final androidExists = doesNestedMapExist(firebaseJsonMap, androidKeys);
+      logger.stdout('Android configuration exists: $androidExists');
+
       if (androidExists) {
+        logger.stdout('Processing Android configuration...');
         final buildConfigurationKeys = [...androidKeys, kBuildConfiguration];
         final androidBuildConfigurationsExist =
             doesNestedMapExist(firebaseJsonMap, buildConfigurationKeys);
+        logger.stdout(
+            'Android build configurations exist: $androidBuildConfigurationsExist');
 
+        logger.stdout('Updating gradle content...');
         await gradleContentUpdates(flutterApp!);
 
         if (androidBuildConfigurationsExist) {
+          logger.stdout('Processing Android build configurations...');
           final buildConfigurations =
               getNestedMap(firebaseJsonMap, buildConfigurationKeys);
+          logger.stdout('Build configurations: $buildConfigurations');
+
           final futures = <Future<void>>[];
           buildConfigurations.forEach((key, dynamic value) async {
-            // ignore: cast_nullable_to_non_nullable
+            logger.stdout('Processing build configuration: $key');
             final configuration =
                 buildConfigurations[key] as Map<String, dynamic>;
 
@@ -423,17 +484,20 @@ class Reconfigure extends FlutterFireCommand {
           });
           await Future.wait(futures);
         }
-        final defaultConfigKeys = [
-          ...androidKeys,
-          kDefaultConfig,
-        ];
+
+        final defaultConfigKeys = [...androidKeys, kDefaultConfig];
+        logger.stdout('Checking for default Android configuration...');
 
         final defaultAndroidExists =
             doesNestedMapExist(firebaseJsonMap, defaultConfigKeys);
+        logger.stdout(
+            'Default Android configuration exists: $defaultAndroidExists');
 
         if (defaultAndroidExists) {
+          logger.stdout('Processing default Android configuration...');
           final defaultAndroid =
               getNestedMap(firebaseJsonMap, defaultConfigKeys);
+          logger.stdout('Default Android config: $defaultAndroid');
 
           await _writeFile(
             _updateServiceFile(defaultAndroid, kAndroid),
@@ -442,47 +506,49 @@ class Reconfigure extends FlutterFireCommand {
         }
       }
 
+      logger.stdout('Checking for iOS configuration...');
       final iosExists = doesNestedMapExist(
         firebaseJsonMap,
-        [
-          kFlutter,
-          kPlatforms,
-          kIos,
-        ],
+        [kFlutter, kPlatforms, kIos],
       );
+      logger.stdout('iOS configuration exists: $iosExists');
+
       if (iosExists) {
+        logger.stdout('Processing iOS configuration...');
         await _updateAppleServiceFiles(firebaseJsonMap, kIos);
       }
 
+      logger.stdout('Checking for macOS configuration...');
       final macosExists = doesNestedMapExist(
         firebaseJsonMap,
-        [
-          kFlutter,
-          kPlatforms,
-          kMacos,
-        ],
+        [kFlutter, kPlatforms, kMacos],
       );
+      logger.stdout('macOS configuration exists: $macosExists');
+
       if (macosExists) {
+        logger.stdout('Processing macOS configuration...');
         await _updateAppleServiceFiles(firebaseJsonMap, kMacos);
       }
 
+      logger.stdout('Checking for Dart configuration...');
       final dartExists = doesNestedMapExist(
         firebaseJsonMap,
-        [
-          kFlutter,
-          kPlatforms,
-          kDart,
-        ],
+        [kFlutter, kPlatforms, kDart],
       );
+      logger.stdout('Dart configuration exists: $dartExists');
 
       if (dartExists) {
+        logger.stdout('Processing Dart configuration...');
         await _writeDartConfigurationFile(firebaseJsonMap);
       }
+
+      logger.stdout('Configuration process completed successfully');
     } catch (e) {
-      // need to set the exit code to 1 for running windows scripts via integration tests
+      logger.stderr('Error during configuration process: $e');
       exitCode = 1;
       stderr.writeln(e);
     } finally {
+      logger.stdout('Exiting with code: $exitCode');
       exit(exitCode);
     }
   }
